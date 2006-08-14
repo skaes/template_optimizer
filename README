@@ -1,0 +1,66 @@
+== Welcome to the Rails Template Optimizer
+
+The Rails Template Optimizer was designed to greatly enhance the
+performance of the rendering engine built into Rails.
+
+The Rails Template Optimizer is available under the GPL LICENCE.
+
+
+== Requirements
+
+The template optimizer depends on the functionality of Ryan Davis'
+ParseTree package, which in turn requires his RubyInline package.
+
+You can either download and install these, or obtain a standalone
+version of ParseTree from http://www.railsexpress.de/downloads.
+
+The advantage of the second option is that you won't need a C compiler
+on your production system.
+
+
+== Getting started
+
+1. Install the software package into some directory of your choice <DIR>. 
+2. Add "require <DIR>/init.rb" to the end of <tt>RAILS_ROOT/config/environment.rb</tt>.
+3. Create directory <tt>RAILS_ROOT/tmp/templates</tt> with appropriate permissions.
+4. Optional: add configuration code to <tt>RAILS_ROOT/config/environment.rb</tt>
+
+Alternatively you can install the template optimizer in the plugin
+directory of your Rails app.
+
+
+== How it works
+
+Whenever the code for a Rails template gets compiled, the Rails
+Template Optimizer gets invoked in the context of the current
+controller's view class, with the name of the compiled render
+method. It then retrieves the abstract syntax tree of the render
+method, processes it according to a set of configured optimization
+options, creates Ruby source code from the transformed tree and
+evaluates the new source to obtain an optimized version of the
+original method.
+
+NOTE: you might want to make sure that the Template Optimizer doesn't
+run in development mode.
+
+
+== Watching it perform 
+
+The original source code of a render method <tt>m</tt> gets logged to
+<tt>RAILS_ROOT/tmp/templates/m.src</tt>. The code for the optimized
+method is written to <tt>RAILS_ROOT/tmp/templates/m.rb</tt>.
+
+Log information produced by the template optimizer is prefixed by the
+string "TO: ", which makes it easy to seach your log for optimizer
+problems.
+
+ 
+== Safety hazards
+
+The original render method will be used by your app if optimization
+raises an exception. In rare cases, where the improved code doesn't
+perform the way it should (raises exceptions or produces wrong
+results), optimization can be turned off for selected templates by
+specifying a list of regular expressions for method names which should
+be exempted from optimization.
+

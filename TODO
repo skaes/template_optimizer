@@ -1,0 +1,33 @@
+STATUS:
+
+we have implemented all essential functionality.
+but still kinda alpha.
+
+
+TODO:
+
+-- modify tag creating methods to accept strings, so we get
+   more opportunities for inlining
+-- more aggressive string combination
+-- add more helpers for url optimization
+-- add more helpers for html tag optimization
+
+
+DONE:
+
+-- support to turn optimization on/off for specific templates
+-- don't iterate 3 times, iterate until nothing changes
+-- print unless e1; e2; end instead of if e1; else e2; end
+-- change "_erbout.concat((if cond then exp1 else exp2 end).to_s)"
+   into "if cond then _erbout.concat(exp1.to_s) else _erbout.concat(exp2.to_s) end
+-- to_param support
+-- check applicability of url optimization (includes refactoring)
+-- named routes support
+-- modify routing code to ignore conditions on route generation
+-- safe beta reduction (i.e. do alpha conversion on inlined function locals)
+-- assert template being optimized for the right controller
+-- support for object parameters in text_fields and friends
+-- evaluate cache urls
+-- new form helper support
+-- support selecting specific optimizations
+-- document methods
