@@ -1,16 +1,18 @@
 STATUS:
 
-we have implemented all essential functionality.
-but still kinda alpha.
+we have implemented most of the essential functionality.
+beta testing can start now.
 
 
 TODO:
 
+-- implement hash creation for named routes
 -- modify tag creating methods to accept strings, so we get
    more opportunities for inlining
 -- more aggressive string combination
 -- add more helpers for url optimization
 -- add more helpers for html tag optimization
+-- optimize the optimizer ;-)
 
 
 DONE:
