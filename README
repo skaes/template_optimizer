@@ -20,13 +20,15 @@ on your production system.
 
 == Getting started
 
-1. Install the software package into some directory of your choice <DIR>. 
+1. Install the software package into some directory of your choice <DIR>.
 2. Add "require <DIR>/init.rb" to the end of <tt>RAILS_ROOT/config/environment.rb</tt>.
 3. Create directory <tt>RAILS_ROOT/tmp/templates</tt> with appropriate permissions.
 4. Optional: add configuration code to <tt>RAILS_ROOT/config/environment.rb</tt>
 
 Alternatively you can install the template optimizer in the plugin
 directory of your Rails app.
+
+NOTE: plugin support is currently broken, but will be fixed eventually.
 
 
 == How it works
@@ -44,7 +46,7 @@ NOTE: you might want to make sure that the Template Optimizer doesn't
 run in development mode.
 
 
-== Watching it perform 
+== Watching it perform
 
 The original source code of a render method <tt>m</tt> gets logged to
 <tt>RAILS_ROOT/tmp/templates/m.src</tt>. The code for the optimized
@@ -54,7 +56,7 @@ Log information produced by the template optimizer is prefixed by the
 string "TO: ", which makes it easy to seach your log for optimizer
 problems.
 
- 
+
 == Safety hazards
 
 The original render method will be used by your app if optimization
