@@ -5,12 +5,15 @@ end
 
 class ActionView::Base
   
+  # turn on optimization by setting this option
   cattr_accessor :optimize_templates
   @@optimize_templates = ARGV.include?('-OT')
   
+  # warning: this will slow down the optimization process considerably
   cattr_accessor :log_template_optimization
   @@log_template_optimization = ARGV.include?('-Ol')
  
+  # if this options is set, the Erb source code will be logged
   cattr_accessor :log_template_source
   @@log_template_source = ARGV.include?('-Ot')
   
