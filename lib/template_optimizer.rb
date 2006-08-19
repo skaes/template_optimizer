@@ -10,7 +10,6 @@ require 'set'
 
 # template compile time optimizer for ERB templates
 class TemplateOptimizer
-  
 
   # support for determining the defining module of method objects
   # (suggested by Nicholas Seckar)
@@ -23,10 +22,10 @@ class TemplateOptimizer
       return eval("::#{$1}") if /Method:\s+#<Class:.*>\(([A-Z:a-z0-9]*)\)#/ =~ to_s
     end
   end
- 
+
   [Method, UnboundMethod].each { |cls| cls.send(:include, GetModuleFromMethod) }
-  
-  
+
+
   # simple helper methods for abstract syntax trees
   module AST_Helpers
 
@@ -34,7 +33,7 @@ class TemplateOptimizer
     def ast_source(ast)
       RubyToRuby.new.process(Sexp.from_array(ast))
     end
-    
+
     # return a copy of a given abstract syntax tree. leafs are not copied.
     def deep_clone(ast)
       case ast
@@ -75,12 +74,12 @@ class TemplateOptimizer
     def is_true?(ast)
       is_a_constant?(ast) && build_constant(ast)
     end
-    
+
     #
     def is_false?(ast)
       is_a_constant?(ast) && !(build_constant(ast))
     end
-    
+
     # create a Ruby value from a given abstact syntax tree
     def build_constant(ast)
       case ast[0]
@@ -100,7 +99,7 @@ class TemplateOptimizer
         h
       else
         raise "not a constant: #{ast.inspect}"
-      end      
+      end
     end
 
     # create an abstract syntax tree from a Ruby value
@@ -163,13 +162,13 @@ class TemplateOptimizer
       h2 = build_hash(ast2)
       build_hash_tree(h1.merge(h2))
     end
-    
+
     # given an ast representing a hash structure, delete a (key, value) pair
     # from the ast and return the value
     def delete_option(key, ast)
       return nil unless ast.is_a?(Array) && ast[0]==:hash
       result = nil
-      1.step(ast.size-1, 2) do |i| 
+      1.step(ast.size-1, 2) do |i|
         if build_constant(ast[i]) == key
           result = ast[i+1]
           ast[i,2] = nil                 # delete key and value
@@ -177,7 +176,7 @@ class TemplateOptimizer
         end
       end
       result
-    end  
+    end
 
     # check wether a given ast representation of an interpolated string
     # can be coverted into a string value. returns either the original ast,
@@ -195,17 +194,17 @@ class TemplateOptimizer
         ast
       end
     end
-    
+
     # check whether a given +ast+ is method call on self with arguments.
     # return the arguments of the call as an array (whithout :array)
     #--
-    # [:fcall, method, [:array, ...]] 
+    # [:fcall, method, [:array, ...]]
     def fcall?(ast, method)
       if ast[0] == :fcall && ast[1] == method && ast[2][0] == :array
         ast[2][1..-1]
       end
     end
-    
+
     # create an ast representing a method call on self. arguments optional.
     def fcall(method, *args)
       if args.length==0
@@ -214,17 +213,17 @@ class TemplateOptimizer
         [:fcall, method, [:array] + args]
       end
     end
-    
+
     # check whether a given +ast+ is method call of the form expr.method
     # return the ast for expr
     #--
-    # [:call, exp, method, ...] 
+    # [:call, exp, method, ...]
     def method_call?(ast, method)
       if ast[0] == :call && ast[2] == method
         ast[1]
       end
     end
-    
+
     # create an ast representing a method call on expr. arguments optional.
     def method_call(exp, method, *args)
       if args.length==0
@@ -233,7 +232,7 @@ class TemplateOptimizer
         [:call, exp, method, [:array] + args]
       end
     end
-       
+
     # given an ast representing a ruby block, merge simple subordinate block
     # into the embedding block
     def merge_blocks(ast)
@@ -248,7 +247,7 @@ class TemplateOptimizer
       end
       ast
     end
-    
+
     # does +ast+ return a string?
     def returns_a_string(ast)
       return false unless ast.is_a?(Array)
@@ -261,13 +260,13 @@ class TemplateOptimizer
         ast[2]==:to_s || ([:+, :<<, :concat].include?(ast[2]) && returns_a_string(ast[1]))
       end
     end
-    
+
   end # AST_Helpers
-  
-  
+
+
   # simple AST helper methods dealing with abstract syntax trees involving _erbout
   module ERB_Helpers
-    
+
     # given abstract syntax tree +ast+, is it a _erbout.concat(expr) call?
     # returns tree for expr, if +ast+ matches above pattern
     def erb_concat?(ast)
@@ -276,7 +275,7 @@ class TemplateOptimizer
         return ast[3][1] if ast[3][0] == :array && ast[3].length==2
       end
     end
-    
+
     # given abstract syntax tree +ast+, is it an assignment to +_erbout+?
     # returns tree for expr if +ast+ matches <tt>_erbout = expr</tt>.
     #--
@@ -286,7 +285,7 @@ class TemplateOptimizer
         ast[2]
       end
     end
-    
+
     # given abstract syntax tree +ast+, is it a <tt>_erbout.concat(expr)</tt> call,
     # where expr is a string constant?
     # returns tree for +expr+ if +ast+ matches above pattern.
@@ -313,7 +312,8 @@ class TemplateOptimizer
           when :first
             return ast[3][1][1] = ast[3][1][1].dup
           when :last
-            return ast[3][1][-1][1] = ast[3][1][-1][1].dup
+            last_elem = ast[3][1][-1]
+            return last_elem[1] = last_elem[1].dup if last_elem[0] == :str
           end
         end
       end
@@ -323,7 +323,7 @@ class TemplateOptimizer
     def erb_concat(exp)
       method_call([:lvar, :_erbout], :concat, exp)
     end
-    
+
     # check whether +ast+ is a local variable assigment.
     # return assigned variable and assigned exp.
     def lasgn?(ast)
@@ -343,7 +343,7 @@ class TemplateOptimizer
     def local_assign_pattern?(ast)
       if ast[0] == :if
         cond, stmt = ast[1], ast[2]
-        l_assigns = [:lvar, :local_assigns]        
+        l_assigns = [:lvar, :local_assigns]
         if method_call?(cond, :has_key?) == l_assigns
           key = cond[3]
           assigned_var, assigned_exp = lasgn?(stmt) # :aminbar, [:call, ...
@@ -353,10 +353,10 @@ class TemplateOptimizer
               assigned_var if assigned_var == key[1][1]
             end
           end
-        end 
+        end
       end
     end
-    
+
   end # ERB_Helpers
 
 
@@ -374,7 +374,7 @@ class TemplateOptimizer
 
       strings = str.split(/____.*?____/)
       vars    =  str.scan(/____.*?____/)
-      
+
       ast = [:dstr, strings.shift]
       vars.length.times do
         sub_ast = deep_clone(symbols[vars.shift])
@@ -382,7 +382,7 @@ class TemplateOptimizer
       end
       ast
     end
-    
+
     # checks whether a given argument ast can be symbolized
     # fails, if ast contains a hash with non constant domain
     def symbolizable?(ast)
@@ -396,9 +396,9 @@ class TemplateOptimizer
         end
       else
         true
-      end    
+      end
     end
-    
+
     # given an ast representing a hash structure that will be processed by method
     # tag_options, check whether it can be symbolized.
     def symbolizable_html_options?(ast)
@@ -409,7 +409,7 @@ class TemplateOptimizer
       end
       symbolizable
     end
-    
+
     # a html option k => v can be symbolized, if k is a constant and
     # boolean options are mapped to constants.
     def symbolizable_html_option?(k, v)
@@ -417,7 +417,7 @@ class TemplateOptimizer
         !%w(disabled readonly multiple).include?(build_constant(k).to_s) || is_a_constant?(v)
       end
     end
-    
+
     # given an ast representing a hash structure that will be processed by method
     # url_for, check whether it can be symbolized.
     def symbolizable_url_options?(ast)
@@ -462,18 +462,18 @@ class TemplateOptimizer
     # build structure for a url option hash or string
     def build_structure_for_url_options(ast, symbols)
       build_structure(ast, symbols, Proc.new {|nd| method_call(nd, :to_param) }) || {}
-    end 
-    
+    end
+
     # build structure for a tag option hash
     def build_structure_for_html_options(ast, symbols)
       build_structure(ast, symbols, Proc.new {|nd| fcall(:h, nd) }) || {}
     end
-    
+
     # build structure for an argument which is neither a url nor a html options hash
     def build_structure_for_arg(ast, symbols)
       build_structure(ast, symbols, Proc.new {|nd| nd })
     end
-    
+
     # evaluate +method+ with +args+. replace symbol strings in result
     # using +symbols+ hash.
     def partially_evaluate_call(method, args, symbols)
@@ -484,22 +484,22 @@ class TemplateOptimizer
       new_ast = substitute_symbols(html_src, symbols)
       ## pp "%%%%%%%% new_ast #{new_ast.inspect}\n"
       new_ast
-    end  
+    end
 
     def nil_or_hash_or_str(type)#:nodoc:
       type.nil? || type == :hash || type == :str
     end
 
-    # check whether +method+ involves a named route. 
+    # check whether +method+ involves a named route.
     def named_route_helper?(method)#:nodoc:
       # switch for old/new routing (r4393+)
-      if defined? ActionController::CodeGeneration 
+      if defined? ActionController::CodeGeneration
         ActionController::Routing::NamedRoutes::Helpers.include?(method)
       else
         ActionController::Routing::Routes.named_routes.helpers.include?(method)
       end
     end
-    
+
     # check whether +url_hash+ is safe for optimization. it is safe, if either
     # the optimized template will always be called with the same controller, or
     # the controller is specified in the +url_hash+.
@@ -509,10 +509,10 @@ class TemplateOptimizer
     end
 
   end # PartialEvaluation_Helpers
-  
+
   # partial evaluators
   module PartialEvaluators
-  
+
     # evaluator for +url_for+.
     #--
     # url_for(options = {}, *parameters_for_method_reference)
@@ -525,7 +525,7 @@ class TemplateOptimizer
       end
       ast
     end
- 
+
     # evaluator for +link_to+.
     #--
     # link_to(name, options = {}, html_options = nil, *parameters_for_method_reference)
@@ -541,7 +541,7 @@ class TemplateOptimizer
       end
       ast
     end
-    
+
     # evaluator for +form_tag+ and +start_form_tag+.
     #--
     # form_tag(url_for_options = {}, options = {}, *parameters_for_url, &proc)
@@ -551,13 +551,13 @@ class TemplateOptimizer
           as, symbols = [], {}
           as << build_structure_for_url_options(args[0], symbols)
           return ast unless safe_url_hash?(as[-1])
-          as << build_structure_for_html_options(args[1], symbols)        
+          as << build_structure_for_html_options(args[1], symbols)
           ast = partially_evaluate_call(method, as, symbols)
         end
       end
       ast
     end
-    
+
     # evaluator for +observe_form+, +observe_field+ and +draggable_element+.
     #--
     # observe_form(form_id, options = {})
@@ -581,7 +581,7 @@ class TemplateOptimizer
       end
       ast
     end
-        
+
     # evaluator for +form_remote_tag+.
     #--
     # form_remote_tag(options = {})
@@ -613,7 +613,7 @@ class TemplateOptimizer
       end
       ast
     end
-               
+
     # evaluator for +link_to_remote+.
     #--
     # link_to_remote(name, options = {}, html_options = {})
@@ -637,7 +637,7 @@ class TemplateOptimizer
       end
       ast
     end
-                   
+
     # evaluator for +cache+.
     #--
     # cache(name = {}, &block)
@@ -654,7 +654,7 @@ class TemplateOptimizer
       end
       ast
     end
-    
+
     # evaluator for named routes.
     def eval_named_route(ast, n, args, types, method)
       new_args = deep_clone(args)
@@ -692,9 +692,9 @@ class TemplateOptimizer
         end
       end
     end
-    
+
   end # PartialEvaluators
-  
+
   # helpers dealing with varable usage and substitution
   module Variable_Helpers
 
@@ -724,7 +724,7 @@ class TemplateOptimizer
       end
       ast
     end
-    
+
     # given a parameter declaration structure, and a list of trees as actuals arguments,
     # compute a hash, mapping variable names to trees.
     #--
@@ -746,7 +746,7 @@ class TemplateOptimizer
     def get_local_name(symbol)
       "_#{symbol}_#{@local_counter += 1}".to_sym
     end
-    
+
     # compute a variable renaming
     def get_local_variables(ast, var_map = {})
       return var_map unless ast.is_a?(Array)
@@ -777,25 +777,25 @@ class TemplateOptimizer
       end
       ast.collect!{|nd| rename_local_variables(nd, var_map, args_hash) }
     end
-    
+
   end # Variable_Helpers
-  
-  
+
+
   include AST_Helpers, ERB_Helpers, PartialEvaluation_Helpers, Variable_Helpers
   include PartialEvaluators
-  
-  
+
+
   cattr_accessor :logging
   @@logging = ARGV.include?('-Ol')
 
   cattr_accessor :log_dir
   @@log_dir = "#{RAILS_ROOT}/tmp/templates"
-  
+
   # calls that should be inlined.
   # for now, only methods with a fixed number of arguments are supported.
   # default vaules for arguments work as well.
   INLINE_CALLS = Set.new []
-  
+
   # constants that should be evaluated.
   EVALUATE_CONSTANTS = Set.new [ :RAILS_ENV, :RAILS_ROOT ]
 
@@ -819,11 +819,11 @@ class TemplateOptimizer
     :distance_of_time_in_words_to_now, :text_area,
     :options_from_collection_for_select, :select, :render_component,
     :draggable_element, :js_distance_of_time_in_words_to_now ]
-  
+
   # regexps for template methods which should not be optimized.
   IGNORED_METHODS = [
     /actionpack_lib_action_controller_templates_rescues/ ]
-  
+
   # regexps for template methods which require "controller" in an url hash.
   METHODS_NEEDING_CONTROLLER_SPECS = [
     /_shared_/ ]
@@ -847,24 +847,24 @@ class TemplateOptimizer
     method_name = method.to_s
     IGNORED_METHODS.any?{|regexp| method_name =~ regexp}
   end
-  
+
   # check whether template associated with +method_name+ requires controller specs
   # for optimization. returns true if the method name matches any of the regexps in
   # +METHODS_NEEDING_CONTROLLER_SPECS+.
   def self.needs_safe_url_hashes?(method_name) #:nodoc:
     METHODS_NEEDING_CONTROLLER_SPECS.any?{|regexp| method_name =~ regexp}
   end
-                 
+
   # list of optimizations to perform. new methods are installed here.
   OPTIMIZATIONS = [
       :inline_calls, :optimize_renders, :remove_dead_code, :evaluate_constant_calls,
       :combine_strings, :optimize_form_for_and_fields_for, :optimize_form_fields,
       :partial_evaluation, :optimize_string_conversions, :remove_unused_local_assigns,
       :distribute_conditionals ]
-  
+
   # maximium number of optimizer iterations to perform.
   ITERATIONS = 5
-  
+
   # run optimizations given as parameter +optimizations+.
   # defaults to +OPTIMIZATIONS+.
   def optimize(optimizations = OPTIMIZATIONS)
@@ -882,7 +882,7 @@ class TemplateOptimizer
 
       looped_optimizers = optimizations -
             [:inline_calls, :optimize_erbout, :remove_unused_local_assigns]
-      
+
       1.upto(ITERATIONS) do |i|
         old_tree = deep_clone(tree)
         looped_optimizers.each do |optimizer|
@@ -894,24 +894,24 @@ class TemplateOptimizer
         end
         if i == ITERATIONS && log
           log.puts "still optimizer changes after #{i} iterations"
-          log.puts "increase ITERATIONS to get better results"
+          log.puts "increase TemplateOptimizer::ITERATIONS to get better results"
         end
       end
-      
+
       # optimize_erbout and remove_unused_locals need to be called only once
       # as they don't enable other optimizations.
       tree = optimizer_pass(tree, :optimize_erbout, log)
       tree = optimizer_pass(tree, :remove_unused_local_assigns, log)
-      
+
       new_source = ast_source(tree)
-    
+
       File.open(@file_name, "w") do |f|
         # f.puts '# -*- ruby -*-'
-        f.puts new_source 
+        f.puts new_source
       end
-      
+
       target.module_eval(new_source, @file_name, 0)
-      
+
       new_source
     ensure
       log.close unless log.nil?
@@ -973,10 +973,10 @@ class TemplateOptimizer
     end
     ast
   end
-  
+
   # create an ast representing an inlined call of +method+ with +args+.
   def inline_call(method, args)
-    # puts "%%%% trying to inline: #{method}" 
+    # puts "%%%% trying to inline: #{method}"
     # puts "context respond_to(#{method})?: #{context.respond_to?(method)}"
     defining_module = context.class.instance_method(method).module
     # puts "defining_module #{defining_module}"
@@ -1016,7 +1016,7 @@ class TemplateOptimizer
     end
     ast
   end
-  
+
   # traverse +ast+ and remove unreachable code.
   def remove_dead_code(ast)
     return ast unless ast.is_a?(Array)
@@ -1040,7 +1040,7 @@ class TemplateOptimizer
     when :if
       case condition = ast[1][0]
       when :true        then ast = ast[2]
-      when :false, :nil then ast = ast[3] if ast.length==4 # ignore elsif  
+      when :false, :nil then ast = ast[3] if ast.length==4 # ignore elsif
       end
     when :and
       if is_false?(ast[1])
@@ -1079,6 +1079,7 @@ class TemplateOptimizer
   def combine_strings(ast)
     return ast unless ast.is_a?(Array)
     ast.collect! {|nd| combine_strings(nd) }
+    begin
     case ast[0]
     when :block
       i = 1
@@ -1111,6 +1112,11 @@ class TemplateOptimizer
         ast = [:str, ast[1][1] + ast[3][1][1]]
       end
     end
+    rescue Exception => e
+      puts "Exception"
+      puts e
+      puts ast.inspect
+    end
     ast
   end
 
@@ -1133,7 +1139,7 @@ class TemplateOptimizer
         new_args << (spacer_template || [:nil])
         new_args << locals
       elsif spacer_template
-        new_args << spacer_template 
+        new_args << spacer_template
       end
     else
       render_sym = :render_partial
@@ -1167,7 +1173,7 @@ class TemplateOptimizer
       end
     end
     ast
-  end  
+  end
 
   # move erb concats inside if branches, i.e., change
   #   _erbout.concat( (if c then e_1 else e_2 end).to_s )
@@ -1201,7 +1207,7 @@ class TemplateOptimizer
   #     [:call, [:lvar, :_erbout], :concat, [:array, ....] ]
   #     ...
   #     [:call, [:lvar, :_erbout], :concat, [:array, ....] ]
-  #     [:lvar, :_erbout]]]]    
+  #     [:lvar, :_erbout]]]]
   def optimize_erbout(ast)
     block = ast[2][1]
     if block[-1] == [:lvar, :_erbout] && erb_concat?(block[-2])
@@ -1218,7 +1224,7 @@ class TemplateOptimizer
     end
     ast
   end
-    
+
   # remove unused local assigns.
   # in particular, the partial counters are almost never used.
   #--
@@ -1259,8 +1265,8 @@ class TemplateOptimizer
       end
     end
     ast
-  end  
-  
+  end
+
   # partial evalution of calls involving urls and/or html options.
   def partial_evaluation(ast)
     return ast unless ast.is_a?(Array)
@@ -1281,16 +1287,16 @@ class TemplateOptimizer
         ast = send "eval_#{evaluator}", ast, n, args, types, method
       end
     end
-    ast 
+    ast
   end
 
   # class MockField is used by the form field optimizer.
   class MockField
-    
+
     def create_method(name, &block)
       self.class.send(:define_method, name, &block)
     end
-    
+
     def initialize(method_name, field_name, field_type, options={})
       create_method(method_name) { value }
       @field_name = field_name
@@ -1298,11 +1304,11 @@ class TemplateOptimizer
       @method_name = method_name
       @options = options
     end
-    
+
     def id_before_type_cast
       "___mock___id_for_template_optimizer___mock___"
     end
-    
+
     def value
       "___mock___value_for_template_optimizer___mock___"
     end
@@ -1334,38 +1340,38 @@ class TemplateOptimizer
       end
       ast
     end
-    
+
     private
-    
+
     include AST_Helpers
 
     def var_tree #:nodoc:
       @options[:object_ast] || [:ivar, "@#{@field_name}".to_sym]
     end
-    
+
     def method_lit #:nodoc:
       [:lit, @method_name.to_sym]
     end
-    
+
     def get_attr_call #:nodoc:
       method_call([:const, HELPER_CLASS], :safe_object_value, var_tree, method_lit)
     end
-    
+
     def check_attr_call(method) #:nodoc:
       method_call([:const, HELPER_CLASS], method, var_tree, method_lit, @options[:checked_ast])
     end
-    
+
     HELPER_CLASS = "ActionView::Helpers::InstanceTag".to_sym #:nodoc:
   end
-    
+
   # optimizable form field helpers.
   OPTIMIZABLE_FORM_HELPER_METHODS = Set.new [
     :text_area, :text_field, :hidden_field, :file_field, :password_field,
     :check_box, :radio_button ]
-  
-  
+
+
   class FieldOptimizer
-    
+
     # collect everthing needed to optimize +ast+.
     def initialize(ast)
       # [:fcall, method, [:array, e1, ..., en]]
@@ -1375,10 +1381,10 @@ class TemplateOptimizer
       @method = ast[1]
       # known form helper method?
       return unless OPTIMIZABLE_FORM_HELPER_METHODS.include?(method)
-      
+
       @name_ast = args[0]
       @method_ast = args[1]
-      
+
       # name and method are constants?
       # puts "%%%% name: #{name_ast.inspect} constant?: #{is_a_constant?(name_ast)}"
       # puts "%%%% name: #{method_ast.inspect} constant?: #{is_a_constant?(method_ast)}"
@@ -1389,27 +1395,27 @@ class TemplateOptimizer
       else
         @options_ast = args[2] || [:hash]
       end
-      
+
       # options hash has a constant domain?
       # puts "%%%% options: #{options_ast.inspect} constant domain?: #{constant_hash_domain?(options_ast)}"
       return unless constant_hash_domain?(options_ast)
       @options_hash = build_hash(options_ast)
       @object_ast = options_hash.delete(:object)
       @options_tree = build_hash_tree(options_hash)
-      
+
       # options hash without :object is a constant?
       # puts "%%%% options hash: #{options_tree.inspect} constant?: #{is_a_constant?(options_tree)}"
       return unless is_a_constant?(options_tree)
-      
+
       # ready to go!
       @tf_name = build_constant(name_ast)
       @tf_method = build_constant(method_ast)
       @tf_options = build_constant(options_tree)
-      
+
       @optimizable = true
       @ast = ast
     end
-    
+
     def optimizable?
       @optimizable
     end
@@ -1425,17 +1431,17 @@ class TemplateOptimizer
         optimize_radio_button(context)
       else
         raise "don't know how to optimize this field: #{self.inspect}"
-      end      
+      end
     end
 
     private
-    
+
     include AST_Helpers
-    
+
     attr_reader :ast, :args, :method, :name_ast, :method_ast, :options_ast
     attr_reader :options_hash, :object_ast, :options_tree
     attr_reader :tf_name, :tf_method, :tf_options
-    
+
     # optimize simple field
     #--
     # text_field(name, method, options = {})
@@ -1447,23 +1453,23 @@ class TemplateOptimizer
       field_string = context.send(method, tf_name, tf_method, mocked_options)
       mock_field.create_ast(field_string)
     end
-    
+
     # optimize check box field
     #--
     # check_box(object_name, method, options = {}, checked_value = "1", unchecked_value = "0")
     # [:fcall, :check_box, [:array, name_ast, method_ast, options_ast, checked_ast, unchecked_ast]]
-    def optimize_check_box(context)  
+    def optimize_check_box(context)
       checked_ast = args[3] || [:str, "1"]
       unchecked_ast = args[4] || [:str, "0"]
       return ast unless is_a_constant?(checked_ast) && is_a_constant?(checked_ast)
-      
+
       tf_checked_value = build_constant(checked_ast)
       tf_unchecked_value = build_constant(unchecked_ast)
-      
+
       tf_checked = tf_options["checked"]
       explicit = tf_options.has_key?("checked")
       tf_options["checked"] = "checked"
-      
+
       mock_field = MockField.new(tf_method, tf_name, method,
                                  :object_ast => object_ast,
                                  :explicit_check => explicit,
@@ -1474,7 +1480,7 @@ class TemplateOptimizer
                                   tf_checked_value, tf_unchecked_value)
       mock_field.create_ast(field_string)
     end
-    
+
     # optimize radio button field
     #--
     # radio_button(object_name, method, tag_value, options = {})
@@ -1483,11 +1489,11 @@ class TemplateOptimizer
       value_ast = args[2]
       return ast unless is_a_constant?(value_ast)
       tf_value = build_constant(value_ast)
-      
+
       tf_checked = tf_options["checked"]
       explicit = tf_options.has_key?("checked")
       tf_options["checked"] = "checked"
-      
+
       mock_field = MockField.new(tf_method, tf_name, method,
                                  :object_ast => object_ast,
                                  :explicit_check => explicit,
@@ -1497,9 +1503,9 @@ class TemplateOptimizer
       field_string = context.send(method, tf_name, tf_method, tf_value, mocked_options)
       mock_field.create_ast(field_string)
     end
-    
+
   end
-  
+
   # traverse +ast+ and optimize calls to form field helpers.
   def optimize_form_fields(ast)
     return ast unless ast.is_a?(Array)
@@ -1511,7 +1517,7 @@ class TemplateOptimizer
     end
     ast
   end
-    
+
   # inline new form helpers +form_for+ and +fields_for+.
   # calls to +form_for+ will always be replaced.
   # replacement of <tt>fields_for ... |f|</tt> requires that all
@@ -1535,7 +1541,7 @@ class TemplateOptimizer
   #      [:dvar, :f],
   #      :text_field,
   #      [:array, [:lit, :name], [:hash, [:str, "size"], [:lit, 20]]]],
-  #     :to_s]]],  
+  #     :to_s]]],
   def optimize_form_for_and_fields_for(ast)
     return ast unless ast.is_a?(Array)
     case ast[0]
@@ -1568,7 +1574,7 @@ class TemplateOptimizer
 
   # optimizable form field helpers used by +fields_for+.
   NEW_FORM_HELPER_METHODS = Set.new.merge OPTIMIZABLE_FORM_HELPER_METHODS
-  
+
   # replace calls to new form helper methods by old ones, using the :object option
   #   f.text_field(:name, "size" => 20)
   # will be replaced by
@@ -1591,14 +1597,14 @@ class TemplateOptimizer
     end
     ast
   end
-  
+
 end
 
 
 __END__
 
 #  Copyright (C) 2006  Stefan Kaes
-# 
+#
 #  This program is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
 #  the Free Software Foundation; either version 2 of the License, or
@@ -1608,7 +1614,7 @@ __END__
 #  but WITHOUT ANY WARRANTY; without even the implied warranty of
 #  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 #  GNU General Public License for more details.
-# 
+#
 #  You should have received a copy of the GNU General Public License
 #  along with this program; if not, write to the Free Software
 #  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
