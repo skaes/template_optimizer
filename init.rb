@@ -17,6 +17,7 @@ class ActionView::Base
   cattr_accessor :log_template_source
   @@log_template_source = ARGV.include?('-Ot')
   
+  # specify directory for logging
   cattr_accessor :template_log_dir
   @@template_log_dir = "#{RAILS_ROOT}/tmp/templates"
   
