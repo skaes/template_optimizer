@@ -107,6 +107,31 @@ class ActionView::Helpers::InstanceTag
     def safe_object_value(object, method)
       object.send method rescue nil
     end
+
+    # helper support for 1.1.6, edge rails already contains this code
+    unless defined? check_box_checked?
+      
+      def check_box_checked?(value, checked_value)
+        case value
+        when TrueClass, FalseClass
+          value
+        when NilClass
+          false
+        when Integer
+          value != 0
+        when String
+          value == checked_value
+        else
+          value.to_i != 0
+        end
+      end
+      
+      def radio_button_checked?(value, checked_value)
+        value.to_s == checked_value.to_s
+      end
+      
+    end #helper support
+
   end
 end
 
@@ -163,5 +188,5 @@ module ActionController
     
   end # Routing
 end # ActionController
- 
+
 ActionController::Routing::Routes.reload
