@@ -687,7 +687,7 @@ class TemplateOptimizer
       when :cache
         method
       else
-        if named_route_helper?(method)
+        if named_route_helper?(method) && !(method.to_s =~ /^hash_for_/)
           :named_route
         end
       end
