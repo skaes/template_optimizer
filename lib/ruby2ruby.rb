@@ -23,15 +23,15 @@ class RubyToRuby < SexpProcessor
     self.strict = true
     self.expected = String
   end
-  
+
   def indent(s)
     s.to_s.map{|line| @indent + line}.join
   end
-  
+
   def process_and(exp)
     "(#{process exp.shift} and #{process exp.shift})"
   end
-  
+
   def process_or(exp)
     "(#{process exp.shift} or #{process exp.shift})"
   end
@@ -43,7 +43,7 @@ class RubyToRuby < SexpProcessor
   def process_defined(exp)
     "defined?(#{process exp.shift})"
   end
-  
+
   def process_args(exp)
     args = []
 
@@ -58,7 +58,7 @@ class RubyToRuby < SexpProcessor
 
     return "(#{args.join ', '})"
   end
-  
+
   def process_array(exp)
     "[" + arg_list(exp) + "]"
   end
@@ -84,13 +84,13 @@ class RubyToRuby < SexpProcessor
     call = process(exp.shift)
     "#{call}(&#{block})"
   end
-  
+
   def process_call(exp)
     receiver_tree = exp.shift
     receiver_kind = receiver_tree[0]
     receiver = process(receiver_tree)
     case receiver_kind
-    when :rescue, :lasgn, :iasgn, :masgn, :attr_asgn, :block then
+    when :rescue, :lasgn, :iasgn, :masgn, :attr_asgn, :block, :op_asgn_or then
       receiver = "(" + receiver + ")"
     end
     name = exp.shift
@@ -110,7 +110,7 @@ class RubyToRuby < SexpProcessor
       "#{receiver}.#{name}#{args ? "(#{args})" : args}"
     end
   end
-  
+
   def process_case(exp)
     s = "case #{process exp.shift}\n"
     until exp.empty?
@@ -123,7 +123,7 @@ class RubyToRuby < SexpProcessor
     end
     s + "\nend"
   end
-  
+
   def process_class(exp)
     s = "class #{exp.shift} < #{exp.shift}\n"
     body = ""
@@ -138,7 +138,7 @@ class RubyToRuby < SexpProcessor
   def process_colon2(exp)
     "#{process(exp.shift)}::#{exp.shift.to_s}"
   end
-  
+
   def process_dasgn_curr(exp)
     var_name = exp.shift.to_s
     if exp.empty?
@@ -197,14 +197,14 @@ class RubyToRuby < SexpProcessor
 
     return s(:defn, name, args, body)
   end
-  
+
   def process_defn(exp)
     name = exp.shift
     args = process(exp.shift).to_a
     body = indent(process(exp.shift))
     return "def #{name}#{args}\n#{body}end".gsub(/\n\s*\n+/, "\n")
   end
-  
+
   def process_dot2(exp)
     "(#{process exp.shift}..#{process exp.shift})"
   end
@@ -212,7 +212,7 @@ class RubyToRuby < SexpProcessor
   def process_dot3(exp)
     "(#{process exp.shift}...#{process exp.shift})"
   end
-  
+
   def process_dstr(exp)
     s = exp.shift.dump[0..-2]
     until exp.empty?
@@ -233,7 +233,7 @@ class RubyToRuby < SexpProcessor
   def process_false(exp)
     "false"
   end
-  
+
   def process_fcall(exp)
     exp_orig = exp.deep_clone
     # [:fcall, :puts, [:array, [:str, "This is a weird loop"]]]
@@ -264,17 +264,21 @@ class RubyToRuby < SexpProcessor
     end
     return "{" + code.map{|hp| "#{hp[0]} => #{hp[1]}"}.join(", ") + "}"
   end
-  
+
   def process_iasgn(exp)
     "#{exp.shift} = #{process exp.shift}"
   end
-  
+
+  def process_op_asgn_or(exp)
+    "#{process exp.shift} ||= (#{process exp.shift})"
+  end
+
   def process_if(exp)
     if exp.length==3 && exp[1].nil? && !exp[2].nil?
       s = ["unless (#{process exp.shift})"]
       exp.shift
       s << "#{indent(process(exp.shift))}"
-    else      
+    else
       s = ["if (#{process exp.shift})"]
       s << "#{indent(process(exp.shift))}"
       until exp.empty?
@@ -285,7 +289,7 @@ class RubyToRuby < SexpProcessor
     s << "end"
     s.join("\n")
   end
-  
+
   def process_iter(exp)
     start = "#{process exp.shift} do |#{process exp.shift}|\n"
     body = exp.shift
@@ -294,11 +298,11 @@ class RubyToRuby < SexpProcessor
     end
     start + indent("#{process body}\n") + "end"
   end
-  
+
   def process_ivar(exp)
     exp.shift.to_s
   end
-  
+
   def process_lasgn(exp)
     variable = exp.shift
     if exp.empty?
@@ -307,7 +311,7 @@ class RubyToRuby < SexpProcessor
       "#{variable} = #{process exp.shift}"
     end
   end
-  
+
   def process_lit(exp)
     obj = exp.shift
     if obj.is_a? Range # to get around how parsed ranges turn into lits and lose parens
@@ -320,11 +324,11 @@ class RubyToRuby < SexpProcessor
   def process_lvar(exp)
     exp.shift.to_s
   end
-  
+
   def process_gvar(exp)
     exp.shift.to_s
   end
-  
+
   def process_masgn(exp)
     lhs = exp.shift
     raise "Not an array: #{lhs}" unless lhs.first == :array
@@ -340,7 +344,7 @@ class RubyToRuby < SexpProcessor
     end
     result
   end
-  
+
   def process_svalue(exp)
     arg_list(exp.shift.sexp_body)
   end
@@ -364,15 +368,15 @@ class RubyToRuby < SexpProcessor
   def process_next(exp)
     "next"
   end
-  
+
   def process_nil(exp)
     "nil"
   end
-  
+
   def process_return(exp)
     "return #{process exp.shift}"
   end
- 
+
   def process_yield(exp)
     formatted_params = ""
     if args = exp.shift
@@ -404,7 +408,7 @@ class RubyToRuby < SexpProcessor
   def process_super(exp)
     "super(#{process(exp.shift)})"
   end
-  
+
   def process_true(exp)
     "true"
   end
@@ -412,11 +416,11 @@ class RubyToRuby < SexpProcessor
   def process_until(exp)
     cond_loop(exp, 'until')
   end
-  
+
   def process_vcall(exp)
     return exp.shift.to_s
   end
-  
+
   def process_when(exp)
     "when #{process(exp.shift).to_s[1..-2]}\n#{indent(process(exp.shift))}"
   end
@@ -424,7 +428,7 @@ class RubyToRuby < SexpProcessor
   def process_while(exp)
     cond_loop(exp, 'while')
   end
-  
+
   def process_zarray(exp)
     "[]"
   end
@@ -466,7 +470,7 @@ class RubyToRuby < SexpProcessor
   def process_begin(exp)
     "begin\n" + indent(process(exp.shift)) + "\nend"
   end
-  
+
   def cond_loop(exp, name)
     cond = process(exp.shift)
     body = indent(process(exp.shift))
@@ -484,7 +488,7 @@ class RubyToRuby < SexpProcessor
     end
     code.join("\n")
   end
-  
+
   def arg_list(exp, delim = ", ")
     code = []
     while !exp.empty?
@@ -492,7 +496,7 @@ class RubyToRuby < SexpProcessor
     end
     code.join delim
   end
-  
+
 end
 
 if __FILE__ == $0
@@ -505,13 +509,13 @@ if __FILE__ == $0
     end
     eval RubyToRuby.translate(RubyToRuby, :initialize)
   end
-  
+
   r2r2r2 = RubyToRubyToRuby.translate(RubyToRuby).sub("RubyToRuby","RubyToRubyToRuby")
   r2r2r2r = RubyToRubyToRuby.translate(RubyToRubyToRuby)
   # File.open('1','w'){|f| f.write r2r2r}
   # File.open('2','w'){|f| f.write r2r2r2}
   # File.open('3','w'){|f| f.write r2r2r2r}
   raise "Translation failed!" if (r2r2r != r2r2r2) or (r2r2r != r2r2r2r)
-  
+
   puts("RubyToRubyToRubyToRubyyyyy!!!")
 end

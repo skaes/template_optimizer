@@ -257,7 +257,7 @@ class TemplateOptimizer
       when :fcall, :vcall
         CALLS_RETURNING_STRINGS.include?(ast[1])
       when :call
-        ast[2]==:to_s || ([:+, :<<, :concat].include?(ast[2]) && returns_a_string(ast[1]))
+        ast[2]==:to_s || ast[2] == :to_param || ([:+, :<<, :concat].include?(ast[2]) && returns_a_string(ast[1]))
       end
     end
 
@@ -655,19 +655,29 @@ class TemplateOptimizer
       ast
     end
 
-    # evaluator for named routes.
+    # evaluator for named route url.
     def eval_named_route(ast, n, args, types, method)
       new_args = deep_clone(args)
       if symbolizable_url_options?(new_args[0])
         as, symbols = [], {}
         as << {:only_path => true}.update(build_structure_for_url_options(new_args[0], symbols))
-        if method.to_s =~ /^(.*)_url/
+        if method.to_s =~ /^(.*)_url$/
           route_name = $1
           hash = context.send "hash_for_#{route_name}_url"
           return ast unless safe_url_hash? hash.merge(as[-1])
         end
         ast = partially_evaluate_call(method, as, symbols)
       end
+      ast
+    end
+
+    # evaluator for named route hash.
+    def eval_named_route_hash(ast, n, args, types, method)
+      return ast unless n==0 || (n==1 && types[0]==:hash && constant_hash_domain?(args[0]))
+      url_hash_tree = tree_from_constant(context.send(method))
+      # puts "%%%%%%%%%%%% #{url_hash_tree.inspect}"
+      ast = merge_hashes_with_constant_domains(url_hash_tree, deep_clone(args[0]) || [:hash])
+      # puts  "%%%%%%%%%%%% #{ast.inspect}"
       ast
     end
 
@@ -687,8 +697,12 @@ class TemplateOptimizer
       when :cache
         method
       else
-        if named_route_helper?(method) && !(method.to_s =~ /^hash_for_/)
-          :named_route
+        if named_route_helper?(method)
+          if method.to_s =~ /^hash_for_.*_url$/
+            :named_route_hash
+          else
+            :named_route
+          end
         end
       end
     end
@@ -960,8 +974,10 @@ class TemplateOptimizer
         ast = tree_from_constant(context.send(ast[1], *args))
       end
     when :call
-      # [:call, e1, method, [:array, e1, .. en]
-      if MERGABLE_HASH_METHODS.include?(ast[2]) &&
+      # [:call, e0, method, [:array, e1, .. en]
+      if method == :to_param && is_a_constant?(ast[1]) && ast[1][0]==:str
+        ast = tree_from_constant(build_constant(ast[0]).to_param)
+      elsif MERGABLE_HASH_METHODS.include?(ast[2]) &&
             constant_hash_domain?(ast[1]) && constant_hash_domain?(ast[3][1])
         ast = merge_hashes_with_constant_domains(ast[1], ast[3][1])
       end
