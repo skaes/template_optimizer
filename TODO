@@ -17,6 +17,7 @@ TODO:
 
 DONE:
 
+-- support helper methods that yield
 -- support to turn optimization on/off for specific templates
 -- don't iterate 3 times, iterate until nothing changes
 -- print unless e1; e2; end instead of if e1; else e2; end

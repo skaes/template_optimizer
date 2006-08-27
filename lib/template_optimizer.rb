@@ -261,6 +261,41 @@ class TemplateOptimizer
       end
     end
 
+    # is +ast+ an inlinable call?
+    def inlinable_call?(ast)
+      return false unless ast.is_a?(Array)
+      case ast[0]
+      when :vcall, :fcall
+        INLINE_CALLS.include?(ast[1])
+      else
+        false
+      end
+    end
+
+    # extract parameter names from a block param section
+    #--
+    # [:iter,
+    #  <method_call>,
+    #  [:dasgn_curr, :text],   <------
+    #  <block_body> ]
+    #
+    # or
+    #
+    # [:iter,
+    #  <method_call>,
+    #  [:masgn, [:array, [:dasgn_curr, :text1], [:dasgn_curr, :text2]]],   <------
+    #  <block_body> ]
+    def extract_block_params(block_params, params = [])
+      return params unless block_params.is_a? Array
+      case block_params[0]
+      when :dasgn_curr
+        params << block_params[1]
+      else
+        block_params.each{|nd| extract_block_params(nd, params) }
+      end
+      params
+    end
+
   end # AST_Helpers
 
 
@@ -792,6 +827,43 @@ class TemplateOptimizer
       ast.collect!{|nd| rename_local_variables(nd, var_map, args_hash) }
     end
 
+    # compute a variable renaming for block local variables
+    # and change :dasgn_curr into :lasgn
+    def get_block_local_variables(ast, var_map = {})
+      return var_map unless ast.is_a?(Array)
+      case ast[0]
+      when :dasgn_curr
+        symbol = ast[1]
+        if var_map[symbol]
+          raise "already defined variable substitution: #{symbol}, map: #{var_map.inspect}"
+        end
+        ast[0] = :lasgn
+        ast[1] = var_map[symbol] = get_local_name(symbol)
+      else
+        ast.each{|nd| get_block_local_variables(nd, var_map) }
+      end
+      var_map
+    end
+
+    # rename block local variables given a renaming
+    # and change :dvar into :lvar
+    def rename_block_local_variables(ast, var_map, args_hash)
+      return ast unless ast.is_a?(Array)
+      case ast[0]
+      when :dvar
+        symbol = ast[1]
+        if new_symbol = var_map[symbol]
+          ast[0] = :lvar
+          ast[1] = new_symbol
+        elsif !(args_hash.has_key? symbol)
+          raise "undefined variable substitution: #{symbol}, map: #{var_map.inspect}"
+        else # block parameter
+          ast[0] = :lvar
+        end
+      end
+      ast.collect!{|nd| rename_block_local_variables(nd, var_map, args_hash) }
+    end
+
   end # Variable_Helpers
 
 
@@ -886,13 +958,20 @@ class TemplateOptimizer
       # turn off regexp recognition during optimization.
       ActionController::Routing.ignore_regexps = true
 
-      log = File.open("#{@@log_dir}/#{method}.log", "w") if @debug
+      @log = File.open("#{@@log_dir}/#{method}.log", "w") if @debug
 
       tree = ParseTree.new.parse_tree_for_method(target, method)
+      if @debug
+        @log.puts '# -*- ruby -*-'
+        @log.puts "#================================================="
+        @log.puts "# original tree:"
+        @log.puts "#-------------------------------------------------"
+        PP.pp tree, @log
+      end
 
       # inline method calls needs to be called only once.
       # other optimizer passes do not produce inlinable calls.
-      tree = optimizer_pass(tree, :inline_calls, log)
+      tree = optimizer_pass(tree, :inline_calls, @log)
 
       looped_optimizers = optimizations -
             [:inline_calls, :optimize_erbout, :remove_unused_local_assigns]
@@ -900,22 +979,22 @@ class TemplateOptimizer
       1.upto(ITERATIONS) do |i|
         old_tree = deep_clone(tree)
         looped_optimizers.each do |optimizer|
-          tree = optimizer_pass(tree, optimizer, log)
+          tree = optimizer_pass(tree, optimizer, @log)
         end
         if old_tree == tree
-          log.puts "no optimizer change after #{i} iterations" if log
+          @log.puts "# no optimizer change after #{i} iterations" if @log
           break
         end
-        if i == ITERATIONS && log
-          log.puts "still optimizer changes after #{i} iterations"
-          log.puts "increase TemplateOptimizer::ITERATIONS to get better results"
+        if i == ITERATIONS && @log
+          @log.puts "# still optimizer changes after #{i} iterations"
+          @log.puts "# increase TemplateOptimizer::ITERATIONS to get better results"
         end
       end
 
       # optimize_erbout and remove_unused_locals need to be called only once
       # as they don't enable other optimizations.
-      tree = optimizer_pass(tree, :optimize_erbout, log)
-      tree = optimizer_pass(tree, :remove_unused_local_assigns, log)
+      tree = optimizer_pass(tree, :optimize_erbout, @log)
+      tree = optimizer_pass(tree, :remove_unused_local_assigns, @log)
 
       new_source = ast_source(tree)
 
@@ -928,7 +1007,7 @@ class TemplateOptimizer
 
       new_source
     ensure
-      log.close unless log.nil?
+      @log.close unless @log.nil?
       ActionController::Routing.ignore_regexps = false
     end
   end
@@ -938,14 +1017,14 @@ class TemplateOptimizer
     unless @debug && self.class.logging && !file.nil?
       self.send method, tree
     else
-      file.puts "================================================="
-      file.puts "new tree for optimizer_pass: #{method}"
-      file.puts "-------------------------------------------------"
+      file.puts "#================================================="
+      file.puts "# new tree for optimizer_pass: #{method}"
+      file.puts "# -------------------------------------------------"
       tree = self.send method, tree
       PP.pp tree, file
-      file.puts "================================================="
-      file.puts "new source for optimizer_pass: #{method}"
-      file.puts "-------------------------------------------------"
+      file.puts "# ================================================="
+      file.puts "# new source for optimizer_pass: #{method}"
+      file.puts "# -------------------------------------------------"
       file.puts ast_source(tree)
       tree
     end
@@ -975,11 +1054,13 @@ class TemplateOptimizer
       end
     when :call
       # [:call, e0, method, [:array, e1, .. en]
-      if method == :to_param && is_a_constant?(ast[1]) && ast[1][0]==:str
+      if ast[2] == :to_param && is_a_constant?(ast[1]) && ast[1][0]==:str
         ast = tree_from_constant(build_constant(ast[0]).to_param)
       elsif MERGABLE_HASH_METHODS.include?(ast[2]) &&
             constant_hash_domain?(ast[1]) && constant_hash_domain?(ast[3][1])
         ast = merge_hashes_with_constant_domains(ast[1], ast[3][1])
+      elsif constant_hash_domain?(ast[1]) && ast[2] == :[] && is_a_constant?(ast[3][1])
+        ast = build_hash(ast[1])[build_constant(ast[3][1])]
       end
     when :const
       # [:const, :RAILS_ENV]
@@ -992,20 +1073,20 @@ class TemplateOptimizer
 
   # create an ast representing an inlined call of +method+ with +args+.
   def inline_call(method, args)
-    # puts "%%%% trying to inline: #{method}"
-    # puts "context respond_to(#{method})?: #{context.respond_to?(method)}"
+    # @log.puts "%%%% trying to inline: #{method}" if @log
+    # @log.puts "context respond_to(#{method})?: #{context.respond_to?(method)}" if @log
     defining_module = context.class.instance_method(method).module
-    # puts "defining_module #{defining_module}"
+    # @log.puts "defining_module #{defining_module}" if @log
     tree = ParseTree.new.parse_tree_for_method(defining_module, method)
-    # pp tree
+    # PP.pp tree, @log if @log
     # [:defn, :method, [:scope, [:block, [:args, ...], ...]]]
     block = tree[2][1]
     formal_args = block[1]
     args_hash = build_arguments_hash(formal_args[1..-1], args)
     block.delete_at(1)
-    # puts "%%%% args_hash: #{args_hash.inspect}"
+    # @log.puts "%%%% args_hash: #{args_hash.inspect}" if @log
     locals = get_local_variables(block)
-    # puts "%%%% locals: #{locals.inspect}"
+    # @log.puts "%%%% locals: #{locals.inspect}" if @log
     rename_local_variables(block, locals, args_hash)
     ast = substitute(block, args_hash)
     if ast.length == 2
@@ -1015,20 +1096,73 @@ class TemplateOptimizer
     end
   end
 
+  # evaluate yields with a given +block_body+, where +params+ are the block's parameters
+  def inline_yields(ast, params, block_body)
+    return ast unless ast.is_a? Array
+    ast.collect!{|nd| inline_yields nd, params, block_body }
+    case ast[0]
+    when :yield
+      block_body = deep_clone(block_body)
+      # @log.puts "%%%%% trying to inline yield: params=#{params.inspect}, yield=" if @log
+      # PP.pp ast, @log if @log
+      # @log.puts "%%%%% block_body:" if @log
+      # PP.pp block_body, @log if @log
+      actuals = ast[1][0]==:array ? ast[1][1..-1] : [ast[1]]
+      arg_pairs = params.zip(actuals)
+      # @log.puts "%%%%% arg_pairs: #{arg_pairs.inspect}" if @log
+      args_hash = arg_pairs.inject({}){|hash, (formal,actual) | hash[formal] = actual; hash}
+      # @log.puts "%%%%% substitution= #{args_hash.inspect}" if @log
+      block_locals = get_block_local_variables(block_body)
+      # @log.puts "%%%% block_locals: #{block_locals.inspect}" if @log
+      rename_block_local_variables(block_body, block_locals, args_hash)   
+      # @log.puts "%%%%% block with dvars renamed:" if @log
+      # PP.pp block_body, @log if @log
+      ast = substitute(block_body, args_hash)
+      # @log.puts "%%%%% result:" if @log
+      # PP.pp ast, @log if @log
+    end
+    ast
+  end
+
+  # inline a block into an inlined method call with embedded yields
+  #--
+  # [:iter, method_call, block_params, block_body]
+  def inline_block(method_call, block_params, block_body)
+    params = extract_block_params(block_params)
+    if block_body[0]==:block
+      block_body.delete_at(1)
+    end
+    inline_yields(method_call, params, block_body)
+  end
+
   # traverse +ast+ and inline calls specified in +INLINE_CALLS+.
   def inline_calls(ast)
     return ast unless ast.is_a?(Array)
-    ast.collect! {|nd| inline_calls(nd) }
     case ast[0]
     when :vcall
       if INLINE_CALLS.include?(ast[1])
         ast = inline_call(ast[1], [])
+        ast = inline_calls(ast)
+      else
+        ast.collect! {|nd| inline_calls(nd) }
       end
     when :fcall
       if INLINE_CALLS.include?(ast[1])
         ast = inline_call(ast[1], ast[2][1..-1])
         ast = inline_calls(ast)
+      else
+        ast.collect! {|nd| inline_calls(nd) }
       end
+    when :iter
+      if inlinable_call?(ast[1])
+        ast[1] = inline_calls(ast[1])
+        ast = inline_block(ast[1], ast[2], ast[3])
+        ast = inline_calls(ast)
+      else
+        ast.collect! {|nd| inline_calls(nd) }
+      end
+    else
+      ast.collect! {|nd| inline_calls(nd) }
     end
     ast
   end
