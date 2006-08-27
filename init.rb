@@ -3,7 +3,7 @@ unless $:.include?(File.dirname(__FILE__) + "/lib")
   require "template_optimizer"
 end
 
-class ActionView::Base
+class ::ActionView::Base
   
   # turn on optimization by setting this option
   cattr_accessor :optimize_templates
@@ -98,7 +98,7 @@ class ActionView::Base
   end
 end
 
-class ActionView::Helpers::InstanceTag
+class ::ActionView::Helpers::InstanceTag
   class << self
     def check_box_check(object, method, checked_value)
       'checked="checked"' if check_box_checked?(safe_object_value(object, method), checked_value)
@@ -139,18 +139,18 @@ class ActionView::Helpers::InstanceTag
   end
 end
 
-class Object
+class ::Object
   def to_param
     to_s
   end
 end
 
-module ActionController
+module ::ActionController
   module Routing
     class << self
       cattr_accessor :ignore_regexps
       
-      if defined? ActionController::CodeGeneration
+      if defined? ::ActionController::CodeGeneration
         def test_condition(expression, condition)
           case condition
           when String then "(#{expression} == #{condition.inspect})"
@@ -173,7 +173,7 @@ module ActionController
     
     end
   
-    unless defined? ActionController::CodeGeneration
+    unless defined? ::ActionController::CodeGeneration
       class Route
         def generation_requirements
           requirement_conditions = requirements.collect do |key, req|
@@ -193,4 +193,4 @@ module ActionController
   end # Routing
 end # ActionController
 
-ActionController::Routing::Routes.reload
+::ActionController::Routing::Routes.reload

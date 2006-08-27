@@ -6,7 +6,6 @@ beta testing can start now.
 
 TODO:
 
--- implement hash creation for named routes
 -- modify tag creating methods to accept strings, so we get
    more opportunities for inlining
 -- more aggressive string combination
@@ -17,7 +16,6 @@ TODO:
 
 DONE:
 
--- support helper methods that yield
 -- support to turn optimization on/off for specific templates
 -- don't iterate 3 times, iterate until nothing changes
 -- print unless e1; e2; end instead of if e1; else e2; end
@@ -34,3 +32,5 @@ DONE:
 -- new form helper support
 -- support selecting specific optimizations
 -- document methods
+-- implement hash creation for named routes
+-- support helper methods that yield
