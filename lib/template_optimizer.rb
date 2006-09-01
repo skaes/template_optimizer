@@ -402,6 +402,10 @@ class TemplateOptimizer
       "____#{@symbolic_value += 1}____"
     end
 
+    def symbol_string?(s)
+      s =~ /____\d+____/
+    end
+
     # turn a string value with embedded symbol strings into an interpolated string
     # takes a mapping from symbols to abstract syntax trees.
     def substitute_symbols(str, symbols)
@@ -525,6 +529,11 @@ class TemplateOptimizer
       type.nil? || type == :hash || type == :str
     end
 
+    def is_a_controller_string?(ast)
+      # @log.puts "# testing for string: #{ast.inspect}" if @log
+      ast and ast.is_a?(String) and !symbol_string?(ast)
+    end
+
     # check whether +method+ involves a named route.
     def named_route_helper?(method)#:nodoc:
       # switch for old/new routing (r4393+)
@@ -540,7 +549,8 @@ class TemplateOptimizer
     # the controller is specified in the +url_hash+.
     def safe_url_hash?(url_hash)
       !@needs_safe_url_hashes or
-        url_hash.has_key?("controller") or url_hash.has_key?(:controller)
+        is_a_controller_string?(url_hash["controller"]) or
+        is_a_controller_string?(url_hash[:controller])
     end
 
   end # PartialEvaluation_Helpers
@@ -839,6 +849,9 @@ class TemplateOptimizer
         end
         ast[0] = :lasgn
         ast[1] = var_map[symbol] = get_local_name(symbol)
+      when :iter
+        # nested block, only look at the method that gets passed the inner block
+        get_block_local_variables(ast[1], var_map)
       else
         ast.each{|nd| get_block_local_variables(nd, var_map) }
       end
@@ -853,12 +866,15 @@ class TemplateOptimizer
       when :dvar
         symbol = ast[1]
         if new_symbol = var_map[symbol]
+          # block local variable
           ast[0] = :lvar
           ast[1] = new_symbol
-        elsif !(args_hash.has_key? symbol)
-          raise "undefined variable substitution: #{symbol}, map: #{var_map.inspect}"
-        else # block parameter
+        elsif args_hash.has_key?(symbol)
+          # parameter of inlined block
           ast[0] = :lvar
+        else
+          # parameter defined in outer block
+          # do nothing
         end
       end
       ast.collect!{|nd| rename_block_local_variables(nd, var_map, args_hash) }
@@ -912,7 +928,7 @@ class TemplateOptimizer
 
   # regexps for template methods which require "controller" in an url hash.
   METHODS_NEEDING_CONTROLLER_SPECS = [
-    /_shared_/ ]
+    /_shared_/, /_layouts_application/ ]
 
   attr_reader :debug, :target, :method, :context
 
@@ -1114,7 +1130,7 @@ class TemplateOptimizer
       # @log.puts "%%%%% substitution= #{args_hash.inspect}" if @log
       block_locals = get_block_local_variables(block_body)
       # @log.puts "%%%% block_locals: #{block_locals.inspect}" if @log
-      rename_block_local_variables(block_body, block_locals, args_hash)   
+      rename_block_local_variables(block_body, block_locals, args_hash)
       # @log.puts "%%%%% block with dvars renamed:" if @log
       # PP.pp block_body, @log if @log
       ast = substitute(block_body, args_hash)
@@ -1148,7 +1164,7 @@ class TemplateOptimizer
       end
     when :fcall
       if INLINE_CALLS.include?(ast[1])
-        ast = inline_call(ast[1], ast[2][1..-1])
+        ast = inline_call(ast[1], ast[2] ? ast[2][1..-1] : [])
         ast = inline_calls(ast)
       else
         ast.collect! {|nd| inline_calls(nd) }
