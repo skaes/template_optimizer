@@ -36,7 +36,7 @@ class ::ActionView::Base
   end
 
   def optimize_template_code(render_symbol, extension)
-    if self.class.optimize_templates
+    if @@optimize_templates
       if TemplateOptimizer.ignore_method?(render_symbol) || extension.to_s != "rhtml"
         logger.info "TO: ignored optimization of render method #{render_symbol}" if logger
       else
