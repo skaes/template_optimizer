@@ -28,7 +28,7 @@ class ::ActionView::Base
 
   def log_template_compilation(method_key, render_symbol, render_source)
     logger.debug "Compiled template #{method_key}\n  ==> #{render_symbol}" if logger
-    if self.class.log_template_source
+    if @@log_template_source
       File.open("#{@@template_log_dir}/#{render_symbol}.src", "w") do |f|
         f.puts render_source
       end
