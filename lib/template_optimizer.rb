@@ -644,7 +644,7 @@ class TemplateOptimizer
                                          symbolizable_html_options?(html_entry)
           as, symbols = [], {}
           options = build_structure_for_arg(new_args[0], symbols)
-          options[:html] = build_structure_for_arg(html_entry, symbols) if html_entry
+          options[:html] = build_structure_for_html_options(html_entry, symbols) if html_entry
           options[:html][:action]= build_structure_for_arg(action_entry, symbols) if action_entry
           url_hash = build_structure_for_url_options(url_entry, symbols)
           return ast unless action_entry || safe_url_hash?(url_hash)
