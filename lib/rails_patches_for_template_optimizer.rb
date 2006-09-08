@@ -149,10 +149,19 @@ class ::ActionView::Helpers::InstanceTag
   end
 end
 
-class ::Object
-  def to_param
-    to_s
-  end
+# class ::Object
+#   def to_param
+#     puts "Object::to_param called on #{self.inspect}"
+#     puts "superclass = #{self.class.superclass}"
+#     to_s
+#   end
+# end
+
+[Numeric, String].each do |klass|
+  klass.class_eval "def to_param; to_s; end"
+end
+[FalseClass, TrueClass, NilClass].each do |klass|
+  klass.class_eval "def to_param; self; end"
 end
 
 module ::ActionController
@@ -183,17 +192,17 @@ module ::ActionController
     end
 
     unless defined? ::ActionController::CodeGeneration
-      puts "TO: preparing for new routes"
-      puts "Route is #{Route.inspect}"
+      # puts "TO: preparing for new routes"
+      # puts "Route is #{Route.inspect}"
       class Route
         def generation_requirements
-          puts "%%%%%%%% calling new generation requirements"
+          # puts "%%%%%%%% calling new generation requirements"
           requirement_conditions = requirements.collect do |key, req|
-            puts "%%%% req= #{req.inspect}"
             if req.is_a? Regexp
+              puts "%%%% req= #{req.inspect}"
               value_regexp = Regexp.new "\\A#{req.source}\\Z"
-              conditional_regexp = "(puts ('%%%% ' + Routing.ignore_regexps); Routing.ignore_regexps ? /.+/ : #{value_regexp.inspect})"
-              "hash[:#{key}] && (#{conditional_regexp}) =~ options[:#{key}]"
+              conditional_regexp = "(Routing.ignore_regexps ? /\\A.+\\Z/ : #{value_regexp.inspect})"
+              "hash[:#{key}] && #{conditional_regexp} =~ options[:#{key}]"
             else
               "hash[:#{key}] == #{req.inspect}"
             end
