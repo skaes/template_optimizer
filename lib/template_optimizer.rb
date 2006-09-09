@@ -123,7 +123,7 @@ class TemplateOptimizer
     # given abstract syntax tree +ast+, is it a hash structure where all keys
     # are constants?
     def constant_hash_domain?(ast)
-      return false unless ast[0]==:hash
+      return false unless ast && ast[0]==:hash
       1.step(ast.size-1, 2) do |i|
         return false unless is_a_constant?(ast[i])
       end
@@ -460,7 +460,9 @@ class TemplateOptimizer
     # given an ast representing a hash structure that will be processed by method
     # url_for, check whether it can be symbolized.
     def symbolizable_url_options?(ast)
-      return true if ast.nil?
+      # url_for will use the hash for current url if no arguments are given
+      # which we can't optimize at this point
+      return false if ast.nil?
       symbolizable = ast[0] == :hash
       each_pair_in_hash_structure(ast) do |k, v|
         symbolizable &&= symbolizable_url_option?(k,v)
@@ -904,11 +906,11 @@ class TemplateOptimizer
   # calls that should be evaluated when all arguments are constant expressions.
   EVALUATE_CALLS = Set.new [
     :stylesheet_link_tag, :javascript_include_tag, :image_tag,
-    :start_form_tag, :end_form_tag, :select_tag, :text_field_tag,
+    :end_form_tag, :select_tag, :text_field_tag, :tag,
     :hidden_field_tag, :file_field_tag, :password_field_tag,
-    :form_tag, :text_area_tag, :check_box_tag, :radio_button_tag,
+    :text_area_tag, :check_box_tag, :radio_button_tag,
     :submit_tag, :image_submit_tag, :link_to_function,
-    :javascript_tag, :content_tag, :form_remote_tag, :link_to_remote,
+    :javascript_tag, :content_tag, :visual_effect,
     :observe_field, :h, :sortable_element, :toggle_effect ]
 
   # calls that will always return strings.
@@ -917,7 +919,7 @@ class TemplateOptimizer
     :render_partial_collection, :sub, :gsub, :pagination_links_each,
     :mail_to, :link_to, :url_for, :link_to_remote, :javascript_tag,
     :link_to_function, :h, :content_tag, :text_field, :check_box, :radio_button,
-    :hidden_field, :file_field, :password_field,
+    :hidden_field, :file_field, :password_field, :tag,
     :distance_of_time_in_words_to_now, :text_area,
     :options_from_collection_for_select, :select, :render_component,
     :draggable_element, :js_distance_of_time_in_words_to_now ]
@@ -930,7 +932,7 @@ class TemplateOptimizer
   METHODS_NEEDING_CONTROLLER_SPECS = [
     /_shared_/, /_layouts_application/ ]
 
-  attr_reader :debug, :target, :method, :context
+  attr_reader :debug, :target, :method, :context, :current_pass, :current_iteration
 
   def initialize(target, method, context, file_name=nil, debug=false)
     @target = target
@@ -941,6 +943,8 @@ class TemplateOptimizer
     @symbolic_value = 0
     @local_counter = 0
     @needs_safe_url_hashes = self.class.needs_safe_url_hashes?(@method.to_s)
+    @current_pass = 'initialize'
+    @current_iteration = 0
   end
 
   # check whether template associated with +method_name+ should be ignored.
@@ -993,6 +997,7 @@ class TemplateOptimizer
             [:inline_calls, :optimize_erbout, :remove_unused_local_assigns]
 
       1.upto(ITERATIONS) do |i|
+        @current_iteration = i
         old_tree = deep_clone(tree)
         looped_optimizers.each do |optimizer|
           tree = optimizer_pass(tree, optimizer, @log)
@@ -1030,6 +1035,7 @@ class TemplateOptimizer
 
   # run an optimizer +method+ on given +tree+. log to +file+ unless <tt>file.nil?</tt>.
   def optimizer_pass(tree, method, file=nil)
+    @current_pass = method
     unless @debug && self.class.logging && !file.nil?
       self.send method, tree
     else
@@ -1038,10 +1044,12 @@ class TemplateOptimizer
       file.puts "# -------------------------------------------------"
       tree = self.send method, tree
       PP.pp tree, file
+      file.flush
       file.puts "# ================================================="
       file.puts "# new source for optimizer_pass: #{method}"
       file.puts "# -------------------------------------------------"
       file.puts ast_source(tree)
+      file.flush
       tree
     end
   end
