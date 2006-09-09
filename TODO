@@ -6,6 +6,7 @@ beta testing can start now.
 
 TODO:
 
+-- do something about url_for with no arguments
 -- modify tag creating methods to accept strings, so we get
    more opportunities for inlining
 -- more aggressive string combination
