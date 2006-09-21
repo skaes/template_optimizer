@@ -41,14 +41,17 @@ class ::ActionView::Base
         logger.info "TO: ignored optimization of render method #{render_symbol}" if logger
       else
         begin
-          TemplateOptimizer.new(CompiledTemplates, render_symbol, self,
-                                "#{@@template_log_dir}/#{render_symbol}.rb",
-                                logger).optimize
+          optimizer = TemplateOptimizer.new(CompiledTemplates, render_symbol, self,
+                                            "#{@@template_log_dir}/#{render_symbol}.rb",
+                                            logger)
+          optimizer.optimize
           logger.info "TO: optimized render method #{render_symbol}" if logger
           rescue Object => e
            if logger
              logger.error "TO: optimizing #{render_symbol} RAISED #{e}"
-             logger.error "TO: Backtrace: #{e.backtrace.join("\nTO: ")}\n"
+             logger.error "TO: current optimizer pass: #{optimizer.current_pass}"
+             logger.error "TO: current optimizer iteration: #{optimizer.current_iteration}"
+             logger.error "TO: backtrace: #{e.backtrace.join("\nTO: ")}\n"
            end
         end
       end
@@ -92,7 +95,7 @@ class ::ActionView::Base
     @@compile_time[render_symbol] = Time.now
   end
 
-  # produce method names which are easier to parse for humans (and compatibe with 1.1.6)
+  # produce method names which are easier to parse for humans (and compatible with 1.1.6)
   def compiled_method_name_file_path_segment(file_name)
     if file_name
       s = File.expand_path(file_name)
@@ -149,19 +152,28 @@ class ::ActionView::Helpers::InstanceTag
   end
 end
 
-# class ::Object
-#   def to_param
-#     puts "Object::to_param called on #{self.inspect}"
-#     puts "superclass = #{self.class.superclass}"
-#     to_s
-#   end
-# end
+if defined? ::ActionController::CodeGeneration
 
-[Numeric, String].each do |klass|
-  klass.class_eval "def to_param; to_s; end"
-end
-[FalseClass, TrueClass, NilClass].each do |klass|
-  klass.class_eval "def to_param; self; end"
+  # patch stable to support a to_param method for (all) objects. the
+  # obvious method won't work reliably: sometimes Object::to_param gets
+  # called insted of the AR one. I have no idea why.
+  # for edge rails, this isn't necessary.
+
+  # class ::Object
+  #   def to_param
+  #     # puts "Object::to_param called on #{self.inspect}"
+  #     # puts "superclass = #{self.class.superclass}"
+  #     to_s
+  #   end
+  # end
+
+  [Numeric, String, Class, ActionController::Base].each do |klass|
+    klass.class_eval "def to_param; to_s; end"
+  end
+
+  [FalseClass, TrueClass, NilClass].each do |klass|
+    klass.class_eval "def to_param; self; end"
+  end
 end
 
 module ::ActionController
@@ -189,17 +201,19 @@ module ::ActionController
           end
         end
       end
-    end
+
+    end # class << self
 
     unless defined? ::ActionController::CodeGeneration
       # puts "TO: preparing for new routes"
       # puts "Route is #{Route.inspect}"
       class Route
         def generation_requirements
-          # puts "%%%%%%%% calling new generation requirements"
+          # puts "%%%%%%%% calling new generation requirements: #{requirements.inspect}"
           requirement_conditions = requirements.collect do |key, req|
+            # puts "%%%%%% #{req.inspect}"
             if req.is_a? Regexp
-              puts "%%%% req= #{req.inspect}"
+              # puts "%%%% req= #{req.inspect}"
               value_regexp = Regexp.new "\\A#{req.source}\\Z"
               conditional_regexp = "(Routing.ignore_regexps ? /\\A.+\\Z/ : #{value_regexp.inspect})"
               "hash[:#{key}] && #{conditional_regexp} =~ options[:#{key}]"
@@ -207,7 +221,22 @@ module ::ActionController
               "hash[:#{key}] == #{req.inspect}"
             end
           end
+          # puts "requirement_conditions: #{requirement_conditions * ' && '}"
           requirement_conditions * ' && ' unless requirement_conditions.empty?
+        end
+      end
+    end
+
+    class DynamicSegment
+      def value_check
+        if default # Then we know it won't be nil
+          "(Routing.ignore_regexps || #{value_regexp.inspect} =~ #{local_name})" if regexp
+        elsif optional?
+          # If we have a regexp check that the value is not given, or that it matches.
+          # If we have no regexp, return nil since we do not require a condition.
+          "#{local_name}.nil? || Routing.ignore_regexps || #{value_regexp.inspect} =~ #{local_name}" if regexp
+        else # Then it must be present, and if we have a regexp, it must match too.
+          "#{local_name} #{"&& (Routing.ignore_regexps || #{value_regexp.inspect} =~ #{local_name})" if regexp}"
         end
       end
     end
@@ -215,4 +244,4 @@ module ::ActionController
   end # Routing
 end # ActionController
 
-::ActionController::Routing::Routes.reload
+# ::ActionController::Routing::Routes.reload
