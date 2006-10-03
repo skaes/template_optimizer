@@ -266,7 +266,13 @@ class RubyToRuby < SexpProcessor
   end
 
   def process_iasgn(exp)
-    "#{exp.shift} = #{process exp.shift}"
+    var = exp.shift
+    value = exp.shift unless exp.empty?
+    if value
+      "#{var} = #{process value}"
+    else
+      var.to_s
+    end
   end
 
   def process_op_asgn_or(exp)
