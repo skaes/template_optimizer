@@ -273,6 +273,10 @@ class RubyToRuby < SexpProcessor
     "#{process exp.shift} ||= (#{process exp.shift})"
   end
 
+  def process_op_asgn_and(exp)
+    "#{process exp.shift} &&= (#{process exp.shift})"
+  end
+
   def process_if(exp)
     if exp.length==3 && exp[1].nil? && !exp[2].nil?
       s = ["unless (#{process exp.shift})"]
