@@ -501,18 +501,21 @@ class TemplateOptimizer
     end
 
     # build structure for a url option hash or string
+    # url_encode parameters at runtime (method defined in Erb::Util)
     def build_structure_for_url_options(ast, symbols)
-      build_structure(ast, symbols, Proc.new {|nd| method_call(nd, :to_param) }) || {}
+      build_structure(ast, symbols, Proc.new {|nd| fcall(:url_encode, method_call(nd, :to_param)) }) || {}
     end
 
     # build structure for a tag option hash
+    # html_escape parameters at runtime (method defined in Erb::Util)
     def build_structure_for_html_options(ast, symbols)
-      build_structure(ast, symbols, Proc.new {|nd| fcall(:h, nd) }) || {}
+      build_structure(ast, symbols, Proc.new {|nd| fcall(:html_escape, nd) }) || {}
     end
 
     # build structure for an argument which is neither a url nor a html options hash
-    def build_structure_for_arg(ast, symbols)
-      build_structure(ast, symbols, Proc.new {|nd| nd })
+    def build_structure_for_arg(ast, symbols, builder=nil)
+      builder ||= Proc.new {|nd| nd }
+      build_structure(ast, symbols, builder)
     end
 
     # evaluate +method+ with +args+. replace symbol strings in result
