@@ -257,7 +257,7 @@ class TemplateOptimizer
       when :fcall, :vcall
         CALLS_RETURNING_STRINGS.include?(ast[1])
       when :call
-        ast[2]==:to_s || ast[2] == :to_param || ([:+, :<<, :concat].include?(ast[2]) && returns_a_string(ast[1]))
+        ast[2]==:to_s || ([:+, :<<, :concat].include?(ast[2]) && returns_a_string(ast[1]))
       end
     end
 
