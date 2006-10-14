@@ -95,17 +95,40 @@ class ::ActionView::Base
     @@compile_time[render_symbol] = Time.now
   end
 
-  # produce method names which are easier to parse for humans (and compatible with 1.1.6)
-  def compiled_method_name_file_path_segment(file_name)
-    if file_name
-      s = File.expand_path(file_name)
-      s.sub!(/^#{Regexp.escape(File.expand_path(RAILS_ROOT))}\//, '') if defined?(RAILS_ROOT)
-      s.sub!(/\.r(html|xml|js)$/,'')
-      s.tr!('/:-', '_')
-      s.gsub!(/([^a-zA-Z0-9_])/) { $1[0].to_s }
-      s
-    else
-      (@@inline_template_count += 1).to_s
+  if private_instance_methods.include? 'compiled_method_name_file_path_segment'
+    # produce method names which are easier to parse for humans (edge rails)
+    def compiled_method_name_file_path_segment(file_name)
+      if file_name
+        s = File.expand_path(file_name).clone
+        s.sub!(/^#{Regexp.escape(File.expand_path(RAILS_ROOT))}\//, '') if defined?(RAILS_ROOT)
+        s.sub!(/\.r(html|xml|js)$/,'')
+        s.tr!('/:-', '_')
+        s.gsub!(/([^a-zA-Z0-9_])/) { $1[0].to_s }
+        s
+      else
+        (@@inline_template_count += 1).to_s
+      end
+    end
+  else
+    # fix bug in 1.1.x
+    def assign_method_name(extension, template, file_name)
+      method_name = '_run_'
+      method_name << "#{extension}_" if extension
+
+      if file_name
+        file_path = File.expand_path(file_name).clone
+        root_path = File.expand_path(RAILS_ROOT) if defined? RAILS_ROOT
+        file_path.sub!(/^#{Regexp.escape(root_path)}\//, '') if root_path
+        file_path.sub!(/\.r(html|xml|js)$/,'')
+        file_path.tr!('/:-', '_')
+        file_path.gsub!(/[^a-zA-Z0-9_]/){|s| s[0].to_s}
+        method_name += file_path
+      else
+        @@inline_template_count += 1
+        method_name << @@inline_template_count.to_s
+      end
+
+      @@method_names[file_name || template] = method_name.intern
     end
   end
 
