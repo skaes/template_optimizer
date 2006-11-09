@@ -14,7 +14,7 @@ class ::ActionView::Base
 
   # specify directory for logging
   cattr_accessor :template_log_dir
-  @@template_log_dir = "#{RAILS_ROOT}/tmp/templates"
+  @@template_log_dir = "#{defined?(RAILS_ROOT) ? RAILS_ROOT : ENV['HOME']}/tmp/templates"
 
   def simple_cache_key(str)
     "#{request_host}/#{str}"
