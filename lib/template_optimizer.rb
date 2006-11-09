@@ -900,7 +900,7 @@ class TemplateOptimizer
   @@logging = ARGV.include?('-Ol')
 
   cattr_accessor :log_dir
-  @@log_dir = "#{defined? RAILS_ROOT ? RAILS_ROOT : ENV['HOME']}/tmp/templates"
+  @@log_dir = "#{defined?(RAILS_ROOT) ? RAILS_ROOT : ENV['HOME']}/tmp/templates"
 
   # calls that should be inlined.
   # for now, only methods with a fixed number of arguments are supported.
