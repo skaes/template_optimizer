@@ -1,12 +1,8 @@
-# alpha version!
-# hic sunt dracones!
-
 require 'parse_tree'
 require 'ruby2ruby'
 require 'logger'
 require 'pp'
 require 'set'
-
 
 # template compile time optimizer for ERB templates
 class TemplateOptimizer
@@ -267,6 +263,17 @@ class TemplateOptimizer
       case ast[0]
       when :vcall, :fcall
         INLINE_CALLS.include?(ast[1])
+      else
+        false
+      end
+    end
+
+    # is +ast+ an inlinable tag helper?
+    def inlinable_tag_helper?(ast)
+      return false unless ast.is_a?(Array)
+      case ast[0]
+      when :vcall, :fcall
+        INLINE_TAGS.include?(ast[1])
       else
         false
       end
@@ -907,6 +914,9 @@ class TemplateOptimizer
   # default vaules for arguments work as well.
   INLINE_CALLS = Set.new []
 
+  # tag helpers which take an optional parameterless block
+  INLINE_TAGS = Set.new [:form_tag, :start_form_tag, :content_tag]
+
   # constants that should be evaluated.
   EVALUATE_CONSTANTS = Set.new [ :RAILS_ENV, :RAILS_ROOT ]
 
@@ -1160,10 +1170,34 @@ class TemplateOptimizer
   # [:iter, method_call, block_params, block_body]
   def inline_block(method_call, block_params, block_body)
     params = extract_block_params(block_params)
-    if block_body[0]==:block
+    if block_body[0]==:block && block_body[1] && block_body[1][0] == :args
       block_body.delete_at(1)
     end
     inline_yields(method_call, params, block_body)
+  end
+
+  # inline a tag helper call
+  #--
+  # [:iter, method_call, nil, block_body]
+  def inline_tag_helper(method_call, block_params, block_body)
+    params = extract_block_params(block_params)
+    # @log.puts "%%%%% method_call:" if @log
+    # PP.pp method_call, @log if @log
+    # @log.puts "%%%%% block_body:" if @log
+    # PP.pp block_body, @log if @log
+    if block_body[0]==:block && block_body[1] && block_body[1][0] == :args
+      block_body.delete_at(1)
+    end
+    case method_call[1]
+    when :form_tag, :end_form_tag
+      [:block, erb_concat(method_call), block_body, erb_concat([:str, "</form>"])]
+    when :content_tag
+      args = method_call[2]
+      args.shift
+      start_tag = erb_concat(fcall(:tag, args[0], args[1], [:false]))
+      end_tag = erb_concat([:dstr, "</", args[0], [:str, ">"]])
+      [:block, start_tag,  block_body, end_tag]
+    end
   end
 
   # traverse +ast+ and inline calls specified in +INLINE_CALLS+.
@@ -1188,6 +1222,9 @@ class TemplateOptimizer
       if inlinable_call?(ast[1])
         ast[1] = inline_calls(ast[1])
         ast = inline_block(ast[1], ast[2], ast[3])
+        ast = inline_calls(ast)
+      elsif inlinable_tag_helper?(ast[1])
+        ast = inline_tag_helper(ast[1], ast[2], ast[3])
         ast = inline_calls(ast)
       else
         ast.collect! {|nd| inline_calls(nd) }
