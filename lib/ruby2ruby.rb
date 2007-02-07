@@ -379,6 +379,10 @@ class RubyToRuby < SexpProcessor
     "next"
   end
 
+  def process_break(exp)
+    "break"
+  end
+
   def process_nil(exp)
     "nil"
   end
