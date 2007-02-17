@@ -342,7 +342,7 @@ class RubyToRuby < SexpProcessor
   def process_masgn(exp)
     lhs = exp.shift
     raise "Not an array: #{lhs}" unless lhs.first == :array
-    result = arg_list(lhs.sexp_body)
+    result = "(#{arg_list(lhs.sexp_body)})"
     unless exp.empty?
       result << " = "
       rhs = exp.shift
