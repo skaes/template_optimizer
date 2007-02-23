@@ -115,6 +115,7 @@ class RubyToRuby < SexpProcessor
     s = "case #{process exp.shift}\n"
     until exp.empty?
       pt = exp.shift
+      break if pt.nil?
       if pt.first == :when
         s << "#{process(pt)}\n"
       else
