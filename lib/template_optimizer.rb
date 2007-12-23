@@ -13,8 +13,8 @@ class TemplateOptimizer
     # return defining module of self
     def module
       # puts "%%%%% in module: #{to_s}"
-      return eval("::#{$1}") if /Method:\s+([A-Z]\w*)#/ =~ to_s
-      return eval("::#{$1}") if /Method:\s+[A-Z]\w*\(([A-Z]\w*)\)#/ =~ to_s
+      return eval("::#{$1}") if /Method:\s+([A-Z][A-Z:a-z0-9]*)#/ =~ to_s
+      return eval("::#{$1}") if /Method:\s+[A-Z][A-Z:a-z0-9]*\(([A-Z][A-Z:a-z0-9]*)\)#/ =~ to_s
       return eval("::#{$1}") if /Method:\s+#<Class:.*>\(([A-Z:a-z0-9]*)\)#/ =~ to_s
     end
   end
@@ -1114,9 +1114,15 @@ class TemplateOptimizer
 
   # create an ast representing an inlined call of +method+ with +args+.
   def inline_call(method, args)
-    # @log.puts "%%%% trying to inline: #{method}" if @log
+    # @log.puts "%%%% trying to inline: #{method} on context: #{context}" if @log
     # @log.puts "context respond_to(#{method})?: #{context.respond_to?(method)}" if @log
-    defining_module = context.class.instance_method(method).module
+    # @log.puts "context instance methods: #{context.class.instance_methods.sort.inspect}" if @log
+    # @log.puts "context methods: #{context.class.methods.sort.inspect}" if @log
+    meta_class = context.instance_eval "class << self; self; end"
+    # @log.puts meta_class.inspect
+    # @log.puts "meta class instance methods: #{meta_class.instance_methods.sort.inspect}" if @log
+    # @log.puts "the method: #{meta_class.instance_method(method).inspect}" if @log
+    defining_module = meta_class.instance_method(method).module
     # @log.puts "defining_module #{defining_module}" if @log
     tree = ParseTree.new.parse_tree_for_method(defining_module, method)
     # PP.pp tree, @log if @log

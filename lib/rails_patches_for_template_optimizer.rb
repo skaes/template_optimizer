@@ -35,9 +35,9 @@ class ::ActionView::Base
     end
   end
 
-  def optimize_template_code(render_symbol, extension)
+  def optimize_template_code(render_symbol)
     if @@optimize_templates
-      if TemplateOptimizer.ignore_method?(render_symbol) || extension.to_s != "rhtml"
+      if TemplateOptimizer.ignore_method?(render_symbol) || render_symbol.to_s !~ /^_run_(rhtml|erb)_/
         logger.info "TO: ignored optimization of render method #{render_symbol}" if logger
       else
         begin
@@ -58,41 +58,68 @@ class ::ActionView::Base
     end
   end
 
-  def compile_template(extension, template, file_name, local_assigns)
-    method_key = file_name || template
+  if private_instance_methods.include?("find_base_path_for") # rails 2.x
+    def compile_template(handler, template, file_name, local_assigns)
+      method_key = file_name || template
+      render_symbol = assign_method_name(handler, template, file_name)
+      render_source = create_template_source(handler, template, render_symbol, local_assigns.keys)
+      line_offset   = @@template_args[render_symbol].size + handler.line_offset
 
-    render_symbol = @@method_names[method_key] || assign_method_name(extension, template, file_name)
-    render_source = create_template_source(extension, template, render_symbol, local_assigns.keys)
-
-    line_offset = @@template_args[render_symbol].size
-    if extension
-      case extension.to_sym
-      when :rxml, :rjs
-        line_offset += 2
-      end
-    end
-
-    begin
-      unless file_name.blank?
+      begin
+        file_name = 'compiled-template' if file_name.blank?
         CompiledTemplates.module_eval(render_source, file_name, -line_offset)
-      else
-        CompiledTemplates.module_eval(render_source, 'compiled-template', -line_offset)
-      end
-    rescue Object => e
-      if logger
-        logger.debug "ERROR: compiling #{render_symbol} RAISED #{e}"
-        logger.debug "Function body: #{render_source}"
-        logger.debug "Backtrace: #{e.backtrace.join("\n")}"
+      rescue Exception => e  # errors from template code
+        if logger
+          logger.debug "ERROR: compiling #{render_symbol} RAISED #{e}"
+          logger.debug "Function body: #{render_source}"
+          logger.debug "Backtrace: #{e.backtrace.join("\n")}"
+        end
+
+        raise TemplateError.new(extract_base_path_from(file_name) || view_paths.first, file_name || template, @assigns, template, e)
       end
 
-      raise TemplateError.new(@base_path, method_key, @assigns, template, e)
+      log_template_compilation(method_key, render_symbol, render_source)
+      optimize_template_code(render_symbol)
+
+      @@compile_time[render_symbol] = Time.now
+      # logger.debug "Compiled template #{file_name || template}\n  ==> #{render_symbol}" if logger
     end
+  else # rails 1.x
+    def compile_template(extension, template, file_name, local_assigns)
+      method_key = file_name || template
 
-    log_template_compilation(method_key, render_symbol, render_source)
+      render_symbol = @@method_names[method_key] || assign_method_name(extension, template, file_name)
+      render_source = create_template_source(extension, template, render_symbol, local_assigns.keys)
 
-    optimize_template_code(render_symbol, extension)
+      line_offset = @@template_args[render_symbol].size
+      if extension
+        case extension.to_sym
+        when :rxml, :rjs
+          line_offset += 2
+        end
+      end
 
-    @@compile_time[render_symbol] = Time.now
+      begin
+        unless file_name.blank?
+          CompiledTemplates.module_eval(render_source, file_name, -line_offset)
+        else
+          CompiledTemplates.module_eval(render_source, 'compiled-template', -line_offset)
+        end
+      rescue Object => e
+        if logger
+          logger.debug "ERROR: compiling #{render_symbol} RAISED #{e}"
+          logger.debug "Function body: #{render_source}"
+          logger.debug "Backtrace: #{e.backtrace.join("\n")}"
+        end
+
+        raise TemplateError.new(@base_path, method_key, @assigns, template, e)
+      end
+
+      log_template_compilation(method_key, render_symbol, render_source)
+      optimize_template_code(render_symbol)
+
+      @@compile_time[render_symbol] = Time.now
+    end
   end
 
   if private_instance_methods.include? 'compiled_method_name_file_path_segment'
